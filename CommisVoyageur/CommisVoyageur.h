@@ -14,11 +14,10 @@
 #include <map>
 #include <algorithm>
 
+
 #include "PriorityQueue.h"
 
 constexpr int MAX_INT = std::numeric_limits<int>::max();
-
-
 
 //#define DEBUG
 
@@ -264,7 +263,7 @@ inline int CommisVoyageur::findPrimMST(std::unordered_set<int> graph, int newVer
 				parent[v] = u;
 				keys[v] = mMatrix[u][v];
 				q.changeKey(v, mMatrix[u][v]);
-				q.print();
+				//q.print();
 			}
 		}
 	}
