@@ -361,3 +361,13 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/CommisVoyageur/Old.h
+/test.txt
+/test0.txt
+/test10.txt
+/test8.txt
+/testEnvironments.json
+/tree.txt
+/CommisVoyageur/CommisVoyageur.vcxproj
+/CommisVoyageur/CommisVoyageur.vcxproj.filters
+/CommisVoyageur.sln
