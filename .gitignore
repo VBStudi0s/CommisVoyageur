@@ -371,3 +371,5 @@ FodyWeavers.xsd
 /CommisVoyageur/CommisVoyageur.vcxproj
 /CommisVoyageur/CommisVoyageur.vcxproj.filters
 /CommisVoyageur.sln
+/test5.txt
+/CommisVoyageur/PriorityQueue.h
