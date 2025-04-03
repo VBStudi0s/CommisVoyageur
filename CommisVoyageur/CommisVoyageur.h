@@ -12,10 +12,12 @@
 #include <unordered_map>
 #include <queue>
 #include <map>
+#include <set>
 #include <algorithm>
 
 
 #include "PriorityQueue.h"
+#include "DSU.h"
 
 constexpr int MAX_INT = std::numeric_limits<int>::max();
 
@@ -33,7 +35,7 @@ class CommisVoyageur
 	std::vector<std::vector<int>> mMatrix;
 
 	// Cities of the problem (aka N in mMatrix = N x N)
-	int mCitiesNum = 0;
+	size_t mCitiesNum = 0;
 
 	int32_t mBestPathCost = INT32_MAX;		// Best found path length (by sum of weights) at the moment
 	std::list<int> mBestPath;				// Best found path at the moment
@@ -54,21 +56,20 @@ class CommisVoyageur
 
 	/*
 	* Method getting lower bound of remaining path with added vertex
-	* cost by its MST (mini,al spanning tree).
-	* Implements Prim's algorithm based on std::priority_queue.
+	* cost by its kind of MST (minimal spanning tree).
+	* Grows "weakly connected Hamilton subgraph":
+	* all vertices in remaining graph are weakly connected.
+	* Implements Kruskal's algorithm based on Disjoint set Union.
 	* Returns int as lower bound.
 	*/
-	int findPrimMST(std::unordered_set<int> graph, int newVertex) const;
-	int oldfindPrimMST(std::unordered_set<int> graph, int newVertex, int cost) const;
-
-	int backfindPrimMST(std::unordered_set<int> graph, int newVertex, int cost=0) const;
+	int findMSTKruskal(std::unordered_set<int> graph, int newVertex) const;
 
 	/*
 	* Recursive method implementing Branch and Bound problem solution.
 	* Uses two types of lower bounds and euristics to choose branches.
 	* Overrites mBestPath and mBestPathCost fields.
 	*/
-	void BnB(std::unordered_set<int> unvisitedVertices);
+	void BnB(std::unordered_set<int> unvisitedVertices);	// Would be better to use two chinese algorithm
 
 	/*
 	* Debug method for showing input graph matrix.
@@ -225,73 +226,44 @@ inline int CommisVoyageur::lowerBoundLightestEdges(std::unordered_set<int> unvis
 	return lowerBound;
 }
 
-
-inline int CommisVoyageur::findPrimMST(std::unordered_set<int> graph, int newVertex) const
+inline int CommisVoyageur::findMSTKruskal(std::unordered_set<int> graph, int newVertex) const
 {
-	if (graph.empty()) return 0;
+#ifdef DEBUG
+	std::cout << "Growing MST:\n";
+#endif // DEBUG
 
-	int totalCost = 0;
-	int start = newVertex;		// Vertex to start grow tree from
+	int minWeight = 0;
+	DSU<int> dsu(graph);
 
-	graph.insert(newVertex);
-
-	std::unordered_map<int, int> keys;		// {vertex, min distance to the tree}
-	std::unordered_map<int, int> parent;	// {vertex, parent}
-	std::unordered_set<int> inMST;
-	std::vector<std::pair<int, int>> qInit;
-	for (auto vertex : graph)
-	{
-		keys.insert({ vertex, MAX_INT });
-		parent.insert({ vertex, -1 });
-		qInit.push_back({ MAX_INT, vertex });
-	}
-	keys[newVertex] = 0;
-
-	PriorityQueue<int, int, std::less<>> q(qInit);		// queue of closest to the tree vertices
-	q.changeKey(newVertex, 0);
-	//q.print();
-
-	while (!q.empty())
-	{
-		auto [costU, u] = q.top();		// getting new vertex
-		q.pop();
-		inMST.insert(u);
-		for (auto v : graph)			// checking all vertices to update distance to the tree
+	using Edge = std::tuple<int, int, int>; // from, to, weight
+	auto edgesComparator = [](const Edge& e1, const Edge& e2) { return std::get<2>(e1) < std::get<2>(e2); };
+	std::multiset<Edge, decltype(edgesComparator)> edges(edgesComparator);
+	for(const auto& u: graph)
+		for (const auto& v : graph)
 		{
-			if (inMST.count(v)==0 && v != u && mMatrix[u][v] < keys[v])		// need to update distance
-			{
-				parent[v] = u;
-				keys[v] = mMatrix[u][v];
-				q.changeKey(v, mMatrix[u][v]);
-				//q.print();
-			}
+			if (u != v)
+				edges.insert({u, v, mMatrix[u][v]});
 		}
-	}
-
-#ifdef DEBUG
-	std::cout << "Found Minimal spanning tree:\n";
-#endif // DEBUG
-
-
-	// getting total cost using knowlegde of vertices parentness
-	for (auto vertex : graph)
+	for (const auto& edge : edges)
 	{
-		if (parent[vertex]!=-1)
+		auto u = std::get<0>(edge), v = std::get<1>(edge);
+		if (dsu.get(u) != dsu.get(v))
 		{
-			totalCost += mMatrix[parent[vertex]][vertex];
-#ifdef DEBUG
-			std::cout << parent[vertex] << " -> " << vertex<<" : cost = "<< mMatrix[parent[vertex]][vertex] << '\n';
-#endif // DEBUG
+			dsu.join(u, v);
+			minWeight += mMatrix[u][v];
 
+#ifdef DEBUG
+			std::cout << "Added " << u << " -> " << v << " , cost = " << mMatrix[u][v] << '\n';
+#endif // DEBUG
 		}
+
 	}
 
-
 #ifdef DEBUG
-	std::cout << "MST lower bound for path "; printPath(mCurPath); std::cout << "-> " << newVertex << " L = " << totalCost << '\n';
+	std::cout << "MST weight is " << minWeight << '\n';
 #endif // DEBUG
 
-	return totalCost;
+	return minWeight;
 }
 
 inline void CommisVoyageur::BnB(std::unordered_set<int> unvisitedVertices)
@@ -329,7 +301,8 @@ inline void CommisVoyageur::BnB(std::unordered_set<int> unvisitedVertices)
 	for (const auto& vertex : unvisitedVertices)
 	{
 		int edgesLowerBound = lowerBoundLightestEdges(unvisitedVertices, vertex);
-		int MSTLowerBound = findPrimMST(unvisitedVertices, vertex);
+		//int MSTLowerBound = findPrimMST(unvisitedVertices, vertex);
+		int MSTLowerBound = findMSTKruskal(unvisitedVertices, vertex);
 		int lowerBound = std::max(edgesLowerBound, MSTLowerBound);		// overall lowest bound
 
 #ifdef DEBUG
@@ -382,7 +355,7 @@ inline void CommisVoyageur::BnB(std::unordered_set<int> unvisitedVertices)
 inline void CommisVoyageur::printPath(const std::list<int>& path) const
 {
 	int i = 0;
-	int n = path.size();
+	size_t n = path.size();
 	for (const auto& city : path)
 	{
 		std::cout << city;
